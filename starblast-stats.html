@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Starblast | Duel Statistics</title>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- ══ FIREBASE COMPAT SDK ══ -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+
+  <style>
+    :root {
+      --bg:         #050710;
+      --glass-bg:   rgba(14, 16, 28, 0.68);
+      --glass-bd:   rgba(0, 235, 255, 0.11);
+      --cyan:       #00ebff;
+      --purple:     #b026ff;
+      --win:        #00ff88;
+      --loss:       #ff3366;
+      --draw:       #8a9ab8;
+      --text:       #dce6f0;
+      --muted:      #6a7890;
+      --font:       'Exo 2', sans-serif;
+      --font-head:  'Orbitron', sans-serif;
+      --ease:       cubic-bezier(.25,.8,.25,1);
+    }
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #starfield { position:fixed; inset:0; z-index:-1; pointer-events:none; }
+
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--glass-bd);
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.03);
+    }
+
+    .hd { font-family: var(--font-head); letter-spacing:1px; text-transform:uppercase; }
+    .glow   { text-shadow: 0 0 14px rgba(0,235,255,.65); }
+    .glow-p { text-shadow: 0 0 14px rgba(176,38,255,.65); color:var(--purple); }
+
+    nav {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:.9rem 5%;
+      border-bottom:1px solid var(--glass-bd);
+      background:rgba(5,7,16,.88);
+      backdrop-filter:blur(20px);
+      position:sticky; top:0; z-index:100;
+    }
+    .logo { font-family:var(--font-head); font-size:1.35rem; font-weight:900; color:var(--cyan); display:flex; align-items:center; gap:10px; letter-spacing:2px; }
+    .nav-links { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+    .nav-link {
+      color:var(--muted); text-decoration:none; font-family:var(--font-head); font-size:.72rem;
+      padding:.45rem .95rem; border-radius:8px; transition:all .22s var(--ease); cursor:pointer;
+      letter-spacing:.4px; border:1px solid transparent;
+    }
+    .nav-link:hover { color:var(--cyan); background:rgba(0,235,255,.06); border-color:rgba(0,235,255,.15); }
+    .nav-link.active { color:var(--cyan); background:rgba(0,235,255,.09); border-color:rgba(0,235,255,.28); box-shadow:0 0 12px rgba(0,235,255,.13); }
+
+    /* Login-Button in Nav */
+    #login-btn {
+      color:var(--muted); font-family:var(--font-head); font-size:.72rem;
+      padding:.45rem .75rem; border-radius:8px; transition:all .22s var(--ease); cursor:pointer;
+      border:1px solid transparent; background:none;
+    }
+    #login-btn:hover { color:var(--cyan); border-color:rgba(0,235,255,.2); background:rgba(0,235,255,.06); }
+    #login-btn.logged-in { color:var(--win); border-color:rgba(0,255,136,.2); }
+
+    main { flex:1; padding:2rem 5%; max-width:1440px; margin:0 auto; width:100%; display:none; }
+    main.active { display:block; animation:viewIn .32s ease-out; }
+    @keyframes viewIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+    .btn {
+      background:rgba(255,255,255,.04); color:var(--text); font-family:var(--font-head); font-size:.72rem;
+      border:1px solid var(--glass-bd); padding:.6rem 1.3rem; border-radius:8px; cursor:pointer;
+      transition:all .22s var(--ease); text-transform:uppercase; letter-spacing:.4px;
+      display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
+    }
+    .btn:hover { transform:translateY(-1px); }
+    .btn:active { transform:translateY(0); }
+    .btn-sm { padding:.38rem .7rem; font-size:.65rem; }
+    .btn-cyan   { border-color:var(--cyan);   color:var(--cyan);   background:rgba(0,235,255,.04); }
+    .btn-cyan:hover   { background:var(--cyan);   color:#000; box-shadow:0 0 20px rgba(0,235,255,.5); }
+    .btn-purple { border-color:var(--purple); color:var(--purple); background:rgba(176,38,255,.04); }
+    .btn-purple:hover { background:var(--purple); color:#fff; box-shadow:0 0 20px rgba(176,38,255,.5); }
+    .btn-danger { border-color:var(--loss);   color:var(--loss);   background:rgba(255,51,102,.04); }
+    .btn-danger:hover { background:var(--loss);   color:#fff; box-shadow:0 0 20px rgba(255,51,102,.5); }
+
+    .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.2rem; }
+    .g3 { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.2rem; }
+    .g2 { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; margin-bottom:1.2rem; }
+    @media(max-width:1060px){ .g4{grid-template-columns:repeat(2,1fr);} }
+    @media(max-width:680px){  .g4,.g3,.g2{grid-template-columns:1fr;} }
+
+    .card {
+      padding:1.3rem 1.4rem;
+      position:relative; overflow:hidden;
+    }
+    .card::after {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg, var(--cyan), transparent);
+    }
+    .card.c-purple::after { background:linear-gradient(90deg, var(--purple),transparent); }
+    .card.c-win::after    { background:linear-gradient(90deg, var(--win),transparent); }
+    .card.c-loss::after   { background:linear-gradient(90deg, var(--loss),transparent); }
+    .card.c-draw::after   { background:linear-gradient(90deg, var(--draw),transparent); }
+    .card.c-fire::after   { background:linear-gradient(90deg, #ff8c00, transparent); }
+    .card .lbl { font-size:.68rem; font-family:var(--font-head); color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:.55rem; }
+    .card .val { font-size:2.1rem; font-weight:700; font-family:var(--font-head); line-height:1; }
+    .card .ico { position:absolute; right:.9rem; bottom:.7rem; font-size:2.3rem; opacity:.06; }
+    .wr-track { width:100%; background:rgba(255,51,102,.14); height:5px; border-radius:3px; overflow:hidden; margin-top:9px; }
+    .wr-fill  { height:100%; background:var(--win); border-radius:3px; transition:width .9s ease; }
+
+    .section-divider {
+      display:flex; align-items:center; gap:12px;
+      margin: 1.6rem 0 1rem;
+    }
+    .section-divider-line { flex:1; height:1px; background:var(--glass-bd); }
+    .section-divider-label {
+      font-family:var(--font-head); font-size:.6rem; color:var(--muted);
+      letter-spacing:2px; white-space:nowrap; text-transform:uppercase;
+    }
+
+    .donut-card { display:flex; align-items:center; gap:1.4rem; padding:1.3rem 1.6rem; }
+    .legend { display:flex; flex-direction:column; gap:7px; }
+    .legend-row { display:flex; align-items:center; gap:8px; font-size:.85rem; }
+    .ldot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+    .streak-num { font-size:2rem; font-weight:700; font-family:var(--font-head); line-height:1; }
+    .streak-lbl { font-size:.72rem; font-family:var(--font-head); letter-spacing:.5px; margin-left:6px; }
+
+    .abar { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem; }
+
+    .tbl-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; white-space:nowrap; }
+    th {
+      font-family:var(--font-head); color:var(--muted); padding:.9rem 1rem;
+      border-bottom:1px solid var(--glass-bd); font-size:.68rem; letter-spacing:.7px;
+      cursor:pointer; transition:color .2s; user-select:none;
+      text-align: left;
+    }
+    th:hover { color:var(--cyan); }
+    td { padding:.9rem 1rem; border-bottom:1px solid rgba(255,255,255,.04); font-size:.88rem; text-align:left; }
+    tbody tr { transition:background .18s; }
+    tbody tr:hover td { background:rgba(255,255,255,.018); }
+    tbody tr:last-child td { border-bottom:none; }
+
+    .av {
+      width:30px; height:30px; border-radius:50%;
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:.65rem; font-weight:700; font-family:var(--font-head); flex-shrink:0;
+    }
+
+    .badge { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; font-size:.68rem; font-weight:700; font-family:var(--font-head); letter-spacing:.4px; }
+    .bw { background:rgba(0,255,136,.09); color:var(--win);  border:1px solid rgba(0,255,136,.28); }
+    .bl { background:rgba(255,51,102,.09); color:var(--loss); border:1px solid rgba(255,51,102,.28); }
+    .bd { background:rgba(138,154,184,.09); color:var(--draw); border:1px solid rgba(138,154,184,.28); }
+
+    .form-track { display:flex; gap:3px; align-items:center; flex-wrap:wrap; }
+    .fdot { width:18px; height:18px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:.58rem; font-weight:800; font-family:var(--font-head); flex-shrink:0; }
+
+    .wr-s5 { color:var(--win); }
+    .wr-s4 { color:#70d890; }
+    .wr-s3 { color:#ffd166; }
+    .wr-s2 { color:#ff9a3c; }
+    .wr-s1 { color:var(--loss); }
+    .mini-bar { width:46px; height:5px; background:rgba(255,51,102,.15); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; margin-right:6px; }
+    .mini-fill { height:100%; border-radius:3px; }
+
+    .ig { margin-bottom:1rem; }
+    label { display:block; font-family:var(--font-head); font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.7px; margin-bottom:5px; }
+    input, select, textarea {
+      width:100%; background:rgba(0,0,0,.45); border:1px solid var(--glass-bd); color:#fff;
+      padding:.8rem .95rem; border-radius:8px; font-family:var(--font); font-size:.9rem; outline:none;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,235,255,.08); }
+    .score-row { display:flex; gap:10px; align-items:center; }
+    .score-row input { text-align:center; font-size:1.25rem; font-weight:700; flex:1; }
+    .score-sep { font-family:var(--font-head); font-size:1.4rem; color:var(--muted); flex-shrink:0; }
+    .sw { position:relative; }
+    .sw i { position:absolute; left:.9rem; top:50%; transform:translateY(-50%); color:var(--muted); font-size:.8rem; pointer-events:none; }
+    .sw input { padding-left:2.4rem; }
+
+    .modal-bg {
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.78); backdrop-filter:blur(7px);
+      z-index:500; display:flex; justify-content:center; align-items:center;
+      opacity:0; pointer-events:none; transition:opacity .22s;
+    }
+    .modal-bg.open { opacity:1; pointer-events:all; }
+    .mbox {
+      width:90%; max-width:480px; padding:1.9rem;
+      transform:translateY(14px) scale(.98);
+      transition:transform .25s var(--ease);
+      max-height:90vh; overflow-y:auto;
+    }
+    .modal-bg.open .mbox { transform:translateY(0) scale(1); }
+    .mbox.wide { max-width:760px; }
+    .mhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.4rem; padding-bottom:.9rem; border-bottom:1px solid var(--glass-bd); }
+    .mhead h2 { font-size:.95rem; }
+    .cx { background:none; border:none; color:var(--muted); font-size:1.2rem; cursor:pointer; transition:color .18s; line-height:1; padding:3px; }
+    .cx:hover { color:var(--loss); }
+
+    .pstats { display:flex; gap:.7rem; margin-bottom:1.4rem; flex-wrap:wrap; }
+    .pstat { flex:1; min-width:95px; background:rgba(0,0,0,.32); padding:.9rem; border-radius:10px; text-align:center; border:1px solid var(--glass-bd); }
+    .pstat.hl { border-color:rgba(0,235,255,.28); }
+    .pstat.hl-fire { border-color:rgba(255,140,0,.28); }
+    .pstat .plbl { font-size:.65rem; color:var(--muted); text-transform:uppercase; font-family:var(--font-head); letter-spacing:.7px; margin-bottom:5px; }
+
+    .pduel-divider {
+      font-family:var(--font-head); font-size:.6rem; color:var(--muted);
+      letter-spacing:2px; text-transform:uppercase;
+      margin: .3rem 0 .7rem;
+      display:flex; align-items:center; gap:8px; width:100%;
+    }
+    .pduel-divider::before, .pduel-divider::after {
+      content:''; flex:1; height:1px; background:var(--glass-bd);
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      position:fixed; inset:0; background:rgba(5,7,16,.92);
+      z-index:9998; display:flex; flex-direction:column;
+      justify-content:center; align-items:center; gap:16px;
+      transition:opacity .4s;
+    }
+    #loading-overlay.hidden { opacity:0; pointer-events:none; }
+    .spinner {
+      width:42px; height:42px; border:3px solid rgba(0,235,255,.15);
+      border-top-color:var(--cyan); border-radius:50%;
+      animation:spin .7s linear infinite;
+    }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    #loading-overlay p { font-family:var(--font-head); font-size:.72rem; color:var(--muted); letter-spacing:1.5px; }
+
+    #toast-zone { position:fixed; bottom:1.4rem; right:1.4rem; z-index:9999; display:flex; flex-direction:column; gap:7px; pointer-events:none; }
+    .toast {
+      display:flex; align-items:center; gap:9px; padding:.8rem 1.1rem;
+      border-radius:10px; background:rgba(12,14,26,.97); backdrop-filter:blur(12px);
+      border:1px solid var(--glass-bd); color:var(--text); font-size:.86rem;
+      min-width:220px; max-width:320px;
+      box-shadow:0 8px 32px rgba(0,0,0,.5);
+      animation:tin .28s ease-out, tout .28s ease-in 2.75s forwards;
+      pointer-events:all;
+    }
+    .toast.ok  { border-color:rgba(0,255,136,.35); }
+    .toast.err { border-color:rgba(255,51,102,.35); }
+    .toast.inf { border-color:rgba(0,235,255,.28); }
+    .toast i { font-size:.9rem; flex-shrink:0; }
+    .toast.ok  i { color:var(--win); }
+    .toast.err i { color:var(--loss); }
+    .toast.inf i { color:var(--cyan); }
+    @keyframes tin  { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes tout { from{opacity:1;transform:translateX(0)}    to{opacity:0;transform:translateX(16px)} }
+
+    .empty { padding:2.5rem 1rem; text-align:center; color:var(--muted); }
+    .empty i { font-size:2.2rem; opacity:.25; display:block; margin-bottom:.8rem; }
+    .flex-gap { display:flex; gap:9px; flex-wrap:wrap; }
+    .oname { display:flex; align-items:center; gap:9px; cursor:pointer; }
+    .oname span:hover { color:var(--cyan); text-decoration:underline; text-underline-offset:3px; }
+
+    /* owner-only: versteckt wenn nicht eingeloggt */
+    .owner-only { display:none; }
+
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:rgba(0,235,255,.22); border-radius:3px; }
+
+    @media(max-width:700px){
+      nav { flex-direction:column; gap:10px; }
+      .nav-links { width:100%; justify-content:center; }
+      .abar { flex-direction:column; align-items:stretch; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="starfield"></canvas>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p>CONNECTING TO DATABASE…</p>
+</div>
+
+<nav>
+  <div class="logo"><i class="fa-solid fa-meteor"></i> <span class="glow">STARBLAST</span> STATS - DANKE</div>
+  <div class="nav-links">
+    <a class="nav-link active" onclick="gotoView('dashboard',this)"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
+    <a class="nav-link"       onclick="gotoView('opponents',this)"><i class="fa-solid fa-users"></i> Opponents</a>
+    <a class="nav-link"       onclick="gotoView('history',this)"><i class="fa-solid fa-history"></i> History</a>
+    <!-- Settings nur für Owner sichtbar -->
+    <a class="nav-link owner-only" onclick="gotoView('settings',this)"><i class="fa-solid fa-database"></i> Data</a>
+    <!-- Login/Logout-Button -->
+    <button id="login-btn" onclick="toggleAuth()" title="Owner Login"><i class="fa-solid fa-lock"></i></button>
+  </div>
+</nav>
+
+<main id="dashboard" class="active">
+  <div class="abar">
+    <h1 class="hd">Commander <span class="glow">Overview</span></h1>
+    <button class="btn btn-cyan owner-only" onclick="openNewMatch()"><i class="fa-solid fa-plus"></i> Add Session</button>
+  </div>
+
+  <div class="g4">
+    <div class="card glass">
+      <div class="lbl">Total Sessions</div>
+      <div class="val" id="d-total">0</div>
+      <i class="fa-solid fa-gamepad ico"></i>
+    </div>
+    <div class="card glass">
+      <div class="lbl">Session Win Rate</div>
+      <div class="val glow" id="d-wr">0%</div>
+      <div class="wr-track"><div class="wr-fill" id="d-wr-bar" style="width:0%"></div></div>
+      <i class="fa-solid fa-trophy ico"></i>
+    </div>
+    <div class="card glass c-win">
+      <div class="lbl">Sessions Won</div>
+      <div class="val" style="color:var(--win)" id="d-wins">0</div>
+      <i class="fa-solid fa-check ico"></i>
+    </div>
+    <div class="card glass c-loss">
+      <div class="lbl">Sessions Lost</div>
+      <div class="val" style="color:var(--loss)" id="d-losses">0</div>
+      <i class="fa-solid fa-xmark ico"></i>
+    </div>
+  </div>
+
+  <div class="g4">
+    <div class="card glass c-draw">
+      <div class="lbl">Draws</div>
+      <div class="val" style="color:var(--draw)" id="d-draws">0</div>
+      <i class="fa-solid fa-equals ico"></i>
+    </div>
+    <div class="card glass">
+      <div class="lbl">Current Streak</div>
+      <div id="d-streak" style="margin-top:4px;">—</div>
+    </div>
+    <div class="card glass c-purple">
+      <div class="lbl">Nemesis <span style="font-size:.6rem; opacity:.7;">(≥3 sessions, lowest WR)</span></div>
+      <div style="font-size:1.1rem; font-weight:600; font-family:var(--font-head); color:var(--loss); padding-top:6px; white-space:normal; line-height:1.3;" id="d-nemesis">—</div>
+      <i class="fa-solid fa-biohazard ico"></i>
+    </div>
+    <div class="card glass c-purple">
+      <div class="lbl">Victim <span style="font-size:.6rem; opacity:.7;">(≥3 sessions, highest WR)</span></div>
+      <div style="font-size:1.1rem; font-weight:600; font-family:var(--font-head); color:var(--win); padding-top:6px; white-space:normal; line-height:1.3;" id="d-victim">—</div>
+      <i class="fa-solid fa-crown ico"></i>
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="glass donut-card">
+      <canvas id="donut" width="150" height="150" style="flex-shrink:0;"></canvas>
+      <div class="legend">
+        <div class="hd" style="font-size:.68rem; color:var(--muted); margin-bottom:5px; letter-spacing:1.2px;">SESSION SPLIT</div>
+        <div class="legend-row"><div class="ldot" style="background:var(--win)"></div>  <span id="l-w">0 Wins</span></div>
+        <div class="legend-row"><div class="ldot" style="background:var(--loss)"></div> <span id="l-l">0 Losses</span></div>
+        <div class="legend-row"><div class="ldot" style="background:var(--draw)"></div> <span id="l-d">0 Draws</span></div>
+      </div>
+    </div>
+    <div class="card glass c-purple" style="display:flex; flex-direction:column; justify-content:center;">
+      <div class="lbl">Most Played Opponent</div>
+      <div style="font-size:1.35rem; font-weight:600; font-family:var(--font-head); padding-top:8px;" id="d-freq">—</div>
+      <i class="fa-solid fa-crosshairs ico"></i>
+    </div>
+  </div>
+
+  <div class="section-divider">
+    <div class="section-divider-line"></div>
+    <span class="section-divider-label"><i class="fa-solid fa-fire" style="color:#ff8c00; margin-right:5px;"></i>Individual Duel Breakdown</span>
+    <div class="section-divider-line"></div>
+  </div>
+
+  <div class="g4">
+    <div class="card glass c-fire">
+      <div class="lbl">Total Duels Played</div>
+      <div class="val" style="color:#ff8c00;" id="d-duels-total">0</div>
+      <i class="fa-solid fa-fire ico"></i>
+    </div>
+    <div class="card glass">
+      <div class="lbl">Duel Win Rate</div>
+      <div class="val" id="d-duel-wr">0%</div>
+      <div class="wr-track"><div class="wr-fill" id="d-duel-wr-bar" style="width:0%"></div></div>
+      <i class="fa-solid fa-bullseye ico"></i>
+    </div>
+    <div class="card glass c-win">
+      <div class="lbl">Duels Won</div>
+      <div class="val" style="color:var(--win)" id="d-duel-wins">0</div>
+      <i class="fa-solid fa-bolt ico"></i>
+    </div>
+    <div class="card glass c-loss">
+      <div class="lbl">Duels Lost</div>
+      <div class="val" style="color:var(--loss)" id="d-duel-losses">0</div>
+      <i class="fa-solid fa-skull ico"></i>
+    </div>
+  </div>
+</main>
+
+<main id="opponents">
+  <div class="abar">
+    <h1 class="hd glow-p">Opponent Database</h1>
+    <div class="flex-gap">
+      <div class="sw"><i class="fa-solid fa-search"></i><input type="text" id="opp-q" placeholder="Search…" oninput="renderOpps()"></div>
+      <button class="btn btn-cyan owner-only" onclick="openNewOpp()"><i class="fa-solid fa-user-plus"></i> Add Opponent</button>
+    </div>
+  </div>
+  <div class="glass tbl-wrap">
+    <table>
+      <thead><tr>
+        <th onclick="srt('name')">Name <i class="fa-solid fa-sort"></i></th>
+        <th onclick="srt('total')">Sessions <i class="fa-solid fa-sort"></i></th>
+        <th>Form (Last 5)</th>
+        <th onclick="srt('winrate')">Session WR <i class="fa-solid fa-sort"></i></th>
+        <th onclick="srt('wins')">W</th>
+        <th onclick="srt('losses')">L</th>
+        <th onclick="srt('draws')">D</th>
+        <th onclick="srt('totalDuels')">Duels <i class="fa-solid fa-sort"></i></th>
+        <th onclick="srt('duelWinrate')">Duel WR <i class="fa-solid fa-sort"></i></th>
+        <th onclick="srt('lastMatch')">Last Session <i class="fa-solid fa-sort"></i></th>
+        <th id="opp-actions-th" style="display:none;">Actions</th>
+      </tr></thead>
+      <tbody id="opp-tb"></tbody>
+    </table>
+  </div>
+</main>
+
+<main id="history">
+  <div class="abar">
+    <h1 class="hd">Session <span class="glow">History</span></h1>
+    <select id="hist-filter" style="width:auto; background:var(--glass-bg);" onchange="renderHist()">
+      <option value="all">All Results</option>
+      <option value="win">Wins</option>
+      <option value="loss">Losses</option>
+      <option value="draw">Draws</option>
+    </select>
+  </div>
+  <div class="glass tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Opponent</th><th>Duels (DANKE : Opp)</th><th>Result</th><th>Notes</th>
+        <th id="hist-actions-th" style="display:none;">Actions</th>
+      </tr></thead>
+      <tbody id="hist-tb"></tbody>
+    </table>
+  </div>
+</main>
+
+<main id="settings">
+  <div class="abar">
+    <h1 class="hd">Data & <span class="glow">Management</span></h1>
+  </div>
+  <div class="g3">
+    <div class="card glass">
+      <div class="lbl"><i class="fa-solid fa-download"></i> Backup</div>
+      <p style="color:var(--muted); margin:10px 0; font-size:.86rem;">Export full database as JSON.</p>
+      <button class="btn btn-cyan" onclick="exportData()" style="width:100%; justify-content:center;">Export JSON</button>
+    </div>
+    <div class="card glass">
+      <div class="lbl"><i class="fa-solid fa-upload"></i> Restore</div>
+      <p style="color:var(--muted); margin:10px 0; font-size:.86rem;">Import a backup file. Overwrites current data.</p>
+      <input type="file" id="imp-file" accept=".json" style="display:none;" onchange="importData(event)">
+      <button class="btn btn-purple" onclick="document.getElementById('imp-file').click()" style="width:100%; justify-content:center;">Import JSON</button>
+    </div>
+    <div class="card glass" style="border-color:rgba(255,51,102,.18);">
+      <div class="lbl" style="color:var(--loss);"><i class="fa-solid fa-triangle-exclamation"></i> Danger Zone</div>
+      <p style="color:var(--muted); margin:10px 0; font-size:.86rem;">Permanently delete all opponents and sessions.</p>
+      <button class="btn btn-danger" onclick="doClear()" style="width:100%; justify-content:center;">Delete All</button>
+    </div>
+  </div>
+</main>
+
+<!-- ══ MODALS ══ -->
+
+<div class="modal-bg" id="m-opp">
+  <div class="mbox glass">
+    <div class="mhead">
+      <h2 class="hd" id="opp-m-title">Add Opponent</h2>
+      <button class="cx" onclick="closeM('m-opp')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form onsubmit="saveOpp(event)">
+      <input type="hidden" id="opp-eid">
+      <div class="ig"><label>Name / Tag</label><input type="text" id="opp-n" required placeholder="e.g. DarkVader99"></div>
+      <div class="ig"><label>Notes (optional)</label><textarea id="opp-nt" rows="3" placeholder="Playstyle, ship preference…"></textarea></div>
+      <button type="submit" class="btn btn-cyan" style="width:100%; justify-content:center; margin-top:.4rem;"><i class="fa-solid fa-save"></i> Save</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-match">
+  <div class="mbox glass">
+    <div class="mhead">
+      <h2 class="hd" id="match-m-title">Add Session</h2>
+      <button class="cx" onclick="closeM('m-match')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form onsubmit="saveMatch(event)">
+      <input type="hidden" id="match-eid">
+      <div class="ig"><label>Opponent</label><select id="match-opp" required></select></div>
+      <div class="ig">
+        <label>Duels Won (You : Opponent)</label>
+        <div class="score-row">
+          <input type="number" id="match-me"   required min="0" placeholder="0">
+          <span class="score-sep">:</span>
+          <input type="number" id="match-opp2" required min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="ig"><label>Date</label><input type="date" id="match-date" required></div>
+      <div class="ig"><label>Note (optional)</label><input type="text" id="match-note" placeholder="Close game, clutch finish…"></div>
+      <button type="submit" class="btn btn-cyan" style="width:100%; justify-content:center; margin-top:.4rem;"><i class="fa-solid fa-save"></i> Save Session</button>
+    </form>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-profile">
+  <div class="mbox wide glass">
+    <div class="mhead">
+      <div style="display:flex; align-items:center; gap:11px;">
+        <div class="av" id="p-av" style="width:38px; height:38px; font-size:.82rem;"></div>
+        <h2 class="hd glow" id="p-name" style="font-size:1.05rem;"></h2>
+      </div>
+      <button class="cx" onclick="closeM('m-profile')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="pstats">
+      <div class="pstat hl">
+        <div class="plbl">Session WR</div>
+        <div style="font-size:1.7rem; font-weight:700; font-family:var(--font-head);" id="p-wr">0%</div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">Sessions</div>
+        <div style="font-size:1.3rem; font-weight:700; margin-top:4px;" id="p-tot">0</div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">W / L / D</div>
+        <div style="font-size:1rem; font-weight:700; margin-top:4px;">
+          <span style="color:var(--win)"  id="p-w">0</span> ·
+          <span style="color:var(--loss)" id="p-l">0</span> ·
+          <span style="color:var(--draw)" id="p-d">0</span>
+        </div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">Recent Form</div>
+        <div class="form-track" id="p-form" style="margin-top:6px; justify-content:center;"></div>
+      </div>
+    </div>
+    <div class="pduel-divider"><i class="fa-solid fa-fire" style="color:#ff8c00;"></i> Duel Breakdown</div>
+    <div class="pstats" style="margin-bottom:1.4rem;">
+      <div class="pstat hl-fire">
+        <div class="plbl">Duel WR</div>
+        <div style="font-size:1.7rem; font-weight:700; font-family:var(--font-head);" id="p-duel-wr">0%</div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">Total Duels</div>
+        <div style="font-size:1.3rem; font-weight:700; margin-top:4px;" id="p-duel-tot">0</div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">Duels W / L</div>
+        <div style="font-size:1rem; font-weight:700; margin-top:4px;">
+          <span style="color:var(--win)"  id="p-duel-w">0</span> ·
+          <span style="color:var(--loss)" id="p-duel-l">0</span>
+        </div>
+      </div>
+      <div class="pstat">
+        <div class="plbl">Avg. per Session</div>
+        <div style="font-size:.95rem; font-weight:700; margin-top:6px;" id="p-duel-avg">—</div>
+      </div>
+    </div>
+    <div class="ig" style="margin-bottom:1.2rem;">
+      <label>Notes</label>
+      <div class="glass" style="padding:.85rem 1rem; background:rgba(0,0,0,.3); font-size:.87rem; color:var(--muted); border-radius:8px;" id="p-notes"></div>
+    </div>
+    <div class="hd" style="font-size:.68rem; color:var(--muted); letter-spacing:1px; margin-bottom:9px;">SESSION HISTORY</div>
+    <div class="glass tbl-wrap" style="max-height:210px; overflow-y:auto;">
+      <table style="font-size:.82rem;">
+        <thead><tr><th>Date</th><th>Duels (You : Opp)</th><th>Result</th><th>Notes</th></tr></thead>
+        <tbody id="p-hist"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div class="modal-bg" id="m-login">
+  <div class="mbox glass" style="max-width:380px;">
+    <div class="mhead">
+      <h2 class="hd" style="font-size:.88rem; color:var(--cyan);">
+        <i class="fa-solid fa-lock" style="margin-right:7px;"></i>Owner Login
+      </h2>
+      <button class="cx" onclick="closeM('m-login')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form onsubmit="doLogin(event)">
+      <div class="ig">
+        <label>E-Mail</label>
+        <input type="email" id="login-email" required placeholder="deine@email.com" autocomplete="email">
+      </div>
+      <div class="ig">
+        <label>Password</label>
+        <input type="password" id="login-pw" required placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div id="login-err" style="color:var(--loss); font-size:.8rem; margin-bottom:.8rem; display:none;"></div>
+      <button type="submit" class="btn btn-cyan" style="width:100%; justify-content:center;">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-bg" id="m-confirm">
+  <div class="mbox glass" style="max-width:360px;">
+    <div class="mhead">
+      <h2 class="hd" style="font-size:.88rem; color:var(--loss);"><i class="fa-solid fa-triangle-exclamation"></i> Confirm</h2>
+      <button class="cx" onclick="resolveC(false)"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <p id="c-msg" style="color:var(--muted); font-size:.88rem; margin-bottom:1.4rem; line-height:1.55;"></p>
+    <div style="display:flex; gap:9px;">
+      <button class="btn" style="flex:1; justify-content:center;" onclick="resolveC(false)">Cancel</button>
+      <button class="btn btn-danger" style="flex:1; justify-content:center;" id="c-ok" onclick="resolveC(true)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-zone"></div>
+
+<script>
+/* ══════════════════════════════════════════════════
+   ██████████  FIREBASE CONFIG  ████████████████████
+   ══ HIER DEINE EIGENEN WERTE EINTRAGEN ══════════
+   ══════════════════════════════════════════════════ */
+const firebaseConfig = {
+  apiKey:            "HIER_DEINEN_API_KEY_EINFÜGEN",
+  authDomain:        "DEIN-PROJEKT.firebaseapp.com",
+  projectId:         "DEIN-PROJEKT-ID",
+  storageBucket:     "DEIN-PROJEKT.appspot.com",
+  messagingSenderId: "DEINE_SENDER_ID",
+  appId:             "DEINE_APP_ID"
+};
+/* ══════════════════════════════════════════════════ */
+
+firebase.initializeApp(firebaseConfig);
+const fsdb = firebase.firestore();
+const auth = firebase.auth();
+
+/* ── DATA ─────────────────────────────────────────── */
+let db        = { opponents: [], matches: [] };
+let isOwner   = false;
+let _unsubDB  = null;   // Firestore listener handle
+
+/* ── AUTH STATE ───────────────────────────────────── */
+auth.onAuthStateChanged(user => {
+  isOwner = !!user;
+
+  // Owner-only Elemente ein-/ausblenden
+  document.querySelectorAll('.owner-only').forEach(el => {
+    el.style.display = isOwner ? '' : 'none';
+  });
+
+  // Actions-Spalten in Tabellen
+  const oTh = document.getElementById('opp-actions-th');
+  const hTh = document.getElementById('hist-actions-th');
+  if (oTh) oTh.style.display = isOwner ? '' : 'none';
+  if (hTh) hTh.style.display = isOwner ? '' : 'none';
+
+  // Login-Button Aussehen
+  const lb = document.getElementById('login-btn');
+  if (lb) {
+    lb.innerHTML    = isOwner ? '<i class="fa-solid fa-lock-open"></i>' : '<i class="fa-solid fa-lock"></i>';
+    lb.title        = isOwner ? 'Logout' : 'Owner Login';
+    lb.className    = isOwner ? 'logged-in' : '';
+    lb.id           = 'login-btn';
+  }
+
+  // Tabellen neu rendern (damit Actions-Buttons erscheinen/verschwinden)
+  renderOpps();
+  renderHist();
+});
+
+/* ── AUTH ACTIONS ─────────────────────────────────── */
+function toggleAuth() {
+  if (isOwner) {
+    auth.signOut().then(() => toast('Ausgeloggt.', 'inf'));
+  } else {
+    openM('m-login');
+  }
+}
+
+function doLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const pw    = document.getElementById('login-pw').value;
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+
+  auth.signInWithEmailAndPassword(email, pw)
+    .then(() => {
+      toast('Willkommen zurück, Commander!', 'ok');
+      closeM('m-login');
+      document.getElementById('login-pw').value = '';
+    })
+    .catch(err => {
+      errEl.textContent   = 'Login fehlgeschlagen. E-Mail oder Passwort falsch.';
+      errEl.style.display = 'block';
+    });
+}
+
+/* ── DB LADEN (Firestore live-sync) ───────────────── */
+function loadDB() {
+  // Lade-Overlay anzeigen
+  const ov = document.getElementById('loading-overlay');
+
+  if (_unsubDB) _unsubDB(); // alten Listener entfernen falls vorhanden
+
+  _unsubDB = fsdb.collection('data').doc('main')
+    .onSnapshot(snap => {
+      if (snap.exists) {
+        db = snap.data();
+        // Arrays sicherstellen (Firestore gibt ggf. undefined zurück)
+        if (!db.opponents) db.opponents = [];
+        if (!db.matches)   db.matches   = [];
+      } else {
+        db = { opponents: [], matches: [] };
+      }
+
+      // Lade-Overlay ausblenden (beim ersten Datenabruf)
+      if (!ov.classList.contains('hidden')) {
+        ov.classList.add('hidden');
+        setTimeout(() => { ov.style.display = 'none'; }, 500);
+      }
+
+      refreshAll();
+    }, err => {
+      console.error('Firestore error:', err);
+      ov.classList.add('hidden');
+      setTimeout(() => { ov.style.display = 'none'; }, 500);
+      toast('Datenbankfehler. Bitte Firebase-Config prüfen.', 'err');
+    });
+}
+
+/* ── DB SPEICHERN ─────────────────────────────────── */
+async function saveDB() {
+  if (!isOwner) { toast('Nicht eingeloggt – keine Schreibrechte.', 'err'); return; }
+  try {
+    await fsdb.collection('data').doc('main').set(db);
+    // refreshAll() wird automatisch durch onSnapshot ausgelöst
+  } catch (err) {
+    console.error('Save error:', err);
+    toast('Fehler beim Speichern!', 'err');
+  }
+}
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+/* ── NAVIGATION ───────────────────────────────────── */
+function gotoView(id, el) {
+  document.querySelectorAll('main').forEach(m => m.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(a => a.classList.remove('active'));
+  if (el) el.classList.add('active');
+}
+
+/* ── MODALS ───────────────────────────────────────── */
+function openM(id) { document.getElementById(id).classList.add('open'); }
+function closeM(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'm-opp') {
+    document.getElementById('opp-eid').value = '';
+    document.getElementById('opp-n').value   = '';
+    document.getElementById('opp-nt').value  = '';
+    document.getElementById('opp-m-title').textContent = 'Add Opponent';
+  }
+  if (id === 'm-match') {
+    document.getElementById('match-eid').value  = '';
+    document.getElementById('match-opp').value  = '';
+    document.getElementById('match-me').value   = '';
+    document.getElementById('match-opp2').value = '';
+    document.getElementById('match-note').value = '';
+    document.getElementById('match-m-title').textContent = 'Add Session';
+  }
+  if (id === 'm-login') {
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-pw').value    = '';
+    document.getElementById('login-err').style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('m-confirm').classList.contains('open')) { resolveC(false); return; }
+    document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => {
+    if (e.target !== bg) return;
+    if (bg.id === 'm-confirm') { resolveC(false); return; }
+    bg.classList.remove('open');
+  });
+});
+
+/* ── TOAST ────────────────────────────────────────── */
+function toast(msg, type = 'inf') {
+  const icons = { ok:'fa-circle-check', err:'fa-circle-xmark', inf:'fa-circle-info' };
+  const z = document.getElementById('toast-zone');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<i class="fa-solid ${icons[type]||icons.inf}"></i><span>${msg}</span>`;
+  z.appendChild(t);
+  setTimeout(() => t.remove(), 3100);
+}
+
+/* ── CONFIRM ──────────────────────────────────────── */
+let _cfn = null;
+function askConfirm(msg, okLbl = 'Delete') {
+  return new Promise(res => {
+    document.getElementById('c-msg').textContent = msg;
+    document.getElementById('c-ok').textContent  = okLbl;
+    _cfn = res;
+    openM('m-confirm');
+  });
+}
+function resolveC(yes) {
+  document.getElementById('m-confirm').classList.remove('open');
+  if (_cfn) { _cfn(yes); _cfn = null; }
+}
+
+/* ── STATS ENGINE ─────────────────────────────────── */
+function oppStats(id) {
+  const m = db.matches.filter(x => x.oppId === id).sort((a,b) => new Date(b.date)-new Date(a.date));
+  const wins    = m.filter(x => x.result==='win').length;
+  const losses  = m.filter(x => x.result==='loss').length;
+  const draws   = m.filter(x => x.result==='draw').length;
+  const total   = m.length;
+  const winrate = total ? Math.round(wins/total*100) : 0;
+  const lastMatch = m[0]?.date ?? null;
+
+  const duelWins    = m.reduce((s, x) => s + (x.myScore  || 0), 0);
+  const duelLosses  = m.reduce((s, x) => s + (x.oppScore || 0), 0);
+  const totalDuels  = duelWins + duelLosses;
+  const duelWinrate = totalDuels ? Math.round(duelWins/totalDuels*100) : 0;
+  const avgDuelsMe  = total ? (duelWins   / total).toFixed(1) : '—';
+  const avgDuelsOpp = total ? (duelLosses / total).toFixed(1) : '—';
+
+  return { wins, losses, draws, total, winrate, lastMatch, history: m,
+           duelWins, duelLosses, totalDuels, duelWinrate, avgDuelsMe, avgDuelsOpp };
+}
+
+function globalStats() {
+  const total   = db.matches.length;
+  const wins    = db.matches.filter(m => m.result==='win').length;
+  const losses  = db.matches.filter(m => m.result==='loss').length;
+  const draws   = db.matches.filter(m => m.result==='draw').length;
+  const winrate = total ? Math.round(wins/total*100) : 0;
+
+  const duelWins    = db.matches.reduce((s, m) => s + (m.myScore  || 0), 0);
+  const duelLosses  = db.matches.reduce((s, m) => s + (m.oppScore || 0), 0);
+  const totalDuels  = duelWins + duelLosses;
+  const duelWinrate = totalDuels ? Math.round(duelWins/totalDuels*100) : 0;
+
+  let mostPlayed=null, maxT=-1, nemesis=null, nwr=0, victim=null, vwr=0, minWR=101, maxWR=-1;
+  db.opponents.forEach(o => {
+    const s = oppStats(o.id);
+    if (s.total > maxT) { maxT=s.total; mostPlayed=o.name; }
+    if (s.total >= 3) {
+      if (s.winrate < minWR) { minWR=s.winrate; nemesis=o.name; nwr=s.winrate; }
+      if (s.winrate > maxWR) { maxWR=s.winrate; victim=o.name;  vwr=s.winrate; }
+    }
+  });
+
+  const sorted = [...db.matches].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  let streak = { type:null, n:0 };
+  if (sorted.length) {
+    streak.type = sorted[0].result;
+    for (const m of sorted) { if (m.result===streak.type) streak.n++; else break; }
+  }
+
+  return { total, wins, losses, draws, winrate,
+           duelWins, duelLosses, totalDuels, duelWinrate,
+           mostPlayed, nemesis, nwr, victim, vwr, streak };
+}
+
+/* ── AVATAR HELPERS ───────────────────────────────── */
+function avColor(name) {
+  let h=0; for (let i=0; i<name.length; i++) h=name.charCodeAt(i)+((h<<5)-h);
+  return `hsl(${Math.abs(h%360)},62%,52%)`;
+}
+function initials(name) { return name.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+function avHtml(name, sz=30) {
+  const c = avColor(name);
+  return `<div class="av" style="width:${sz}px;height:${sz}px;background:${c}18;color:${c};border:1px solid ${c}38;">${initials(name)}</div>`;
+}
+
+/* ── WIN-RATE COLOR ───────────────────────────────── */
+function wrCls(wr) {
+  if (wr>=70) return 'wr-s5';
+  if (wr>=55) return 'wr-s4';
+  if (wr>=45) return 'wr-s3';
+  if (wr>=30) return 'wr-s2';
+  return 'wr-s1';
+}
+function wrBarColor(wr) {
+  if (wr>=70) return 'var(--win)';
+  if (wr>=55) return '#6dd495';
+  if (wr>=45) return '#ffd166';
+  if (wr>=30) return '#ff9a3c';
+  return 'var(--loss)';
+}
+
+/* ── FORM DOTS ────────────────────────────────────── */
+function formDots(oppId, n=5) {
+  const m = db.matches.filter(x=>x.oppId===oppId).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,n);
+  if (!m.length) return '<span style="color:var(--muted); font-size:.75rem;">—</span>';
+  return m.map(x => {
+    const c = x.result==='win' ? 'var(--win)' : x.result==='loss' ? 'var(--loss)' : 'var(--draw)';
+    const L = x.result==='win' ? 'W' : x.result==='loss' ? 'L' : 'D';
+    return `<span class="fdot" style="background:${c}18;color:${c};border:1px solid ${c}45;">${L}</span>`;
+  }).join('');
+}
+
+/* ── BADGE HTML ───────────────────────────────────── */
+function badge(match) {
+  const sc = `${match.myScore}:${match.oppScore}`;
+  if (match.result==='win')  return `<span class="badge bw">WIN ${sc}</span>`;
+  if (match.result==='loss') return `<span class="badge bl">LOSS ${sc}</span>`;
+  return `<span class="badge bd">DRAW ${sc}</span>`;
+}
+
+/* ── DONUT CHART ──────────────────────────────────── */
+function drawDonut(wins, losses, draws) {
+  const cv = document.getElementById('donut');
+  if (!cv) return;
+  const cx2 = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const cx = W/2, cy = H/2;
+  const R  = W*0.41;
+  const lw = W*0.135;
+  cx2.clearRect(0,0,W,H);
+  const total = wins+losses+draws;
+  if (!total) {
+    cx2.beginPath(); cx2.arc(cx,cy,R-lw/2,0,Math.PI*2);
+    cx2.lineWidth=lw; cx2.strokeStyle='rgba(255,255,255,.05)'; cx2.stroke();
+    return;
+  }
+  const segs = [{v:wins,c:'#00ff88'},{v:losses,c:'#ff3366'},{v:draws,c:'#8a9ab8'}].filter(s=>s.v>0);
+  const gap = segs.length>1 ? 0.055 : 0;
+  const avail = Math.PI*2 - gap*segs.length;
+  let a = -Math.PI/2;
+  segs.forEach(s => {
+    const sweep = (s.v/total)*avail;
+    cx2.beginPath(); cx2.arc(cx,cy,R-lw/2, a+gap/2, a+sweep+gap/2);
+    cx2.lineWidth=lw; cx2.strokeStyle=s.c; cx2.lineCap='butt'; cx2.stroke();
+    a += sweep+gap;
+  });
+  const wr = Math.round(wins/total*100);
+  cx2.font = `bold ${W*0.155}px Orbitron,sans-serif`;
+  cx2.textAlign='center'; cx2.textBaseline='middle';
+  cx2.fillStyle = wr>=50 ? '#00ff88' : '#ff3366';
+  cx2.fillText(wr+'%', cx, cy);
+}
+
+/* ── DASHBOARD ────────────────────────────────────── */
+function renderDash() {
+  const s = globalStats();
+
+  document.getElementById('d-total').textContent   = s.total;
+  document.getElementById('d-wins').textContent    = s.wins;
+  document.getElementById('d-losses').textContent  = s.losses;
+  document.getElementById('d-draws').textContent   = s.draws;
+  document.getElementById('d-wr').textContent      = s.winrate+'%';
+  setTimeout(()=>{ document.getElementById('d-wr-bar').style.width = s.winrate+'%'; }, 80);
+
+  document.getElementById('d-duels-total').textContent = s.totalDuels;
+  document.getElementById('d-duel-wins').textContent   = s.duelWins;
+  document.getElementById('d-duel-losses').textContent = s.duelLosses;
+  const dwrEl = document.getElementById('d-duel-wr');
+  dwrEl.textContent  = s.duelWinrate+'%';
+  dwrEl.className    = 'val ' + wrCls(s.duelWinrate);
+  setTimeout(()=>{
+    document.getElementById('d-duel-wr-bar').style.width      = s.duelWinrate+'%';
+    document.getElementById('d-duel-wr-bar').style.background = wrBarColor(s.duelWinrate);
+  }, 80);
+
+  const sel = document.getElementById('d-streak');
+  if (s.streak.type) {
+    const c = s.streak.type==='win' ? 'var(--win)' : s.streak.type==='loss' ? 'var(--loss)' : 'var(--draw)';
+    const lbl = s.streak.type.toUpperCase();
+    sel.innerHTML = `<span class="streak-num" style="color:${c}">${s.streak.n}</span><span class="streak-lbl" style="color:${c}">${lbl}</span>`;
+  } else { sel.textContent = '—'; }
+
+  document.getElementById('d-freq').textContent    = s.mostPlayed || '—';
+  document.getElementById('d-nemesis').textContent = s.nemesis ? `${s.nemesis} (${s.nwr}%)` : '—';
+  document.getElementById('d-victim').textContent  = s.victim  ? `${s.victim} (${s.vwr}%)`  : '—';
+  document.getElementById('l-w').textContent = `${s.wins} Wins`;
+  document.getElementById('l-l').textContent = `${s.losses} Losses`;
+  document.getElementById('l-d').textContent = `${s.draws} Draws`;
+  drawDonut(s.wins, s.losses, s.draws);
+}
+
+/* ── OPPONENTS ────────────────────────────────────── */
+let sortSt = { col:'lastMatch', asc:false };
+function srt(col) { sortSt.asc = sortSt.col===col ? !sortSt.asc : false; sortSt.col=col; renderOpps(); }
+
+function renderOpps() {
+  const tb = document.getElementById('opp-tb');
+  const q  = (document.getElementById('opp-q')?.value||'').toLowerCase();
+  let rows = db.opponents.map(o => ({...o, ...oppStats(o.id)}));
+  if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q));
+  rows.sort((a,b) => {
+    let va=a[sortSt.col], vb=b[sortSt.col];
+    if (sortSt.col==='name') { va=va.toLowerCase(); vb=vb.toLowerCase(); }
+    if (sortSt.col==='lastMatch') { va=va?new Date(va).getTime():0; vb=vb?new Date(vb).getTime():0; }
+    return (va<vb ? -1 : va>vb ? 1 : 0) * (sortSt.asc?1:-1);
+  });
+  tb.innerHTML = '';
+  if (!rows.length) {
+    tb.innerHTML = `<tr><td colspan="11"><div class="empty"><i class="fa-solid fa-user-slash"></i>No opponents found.</div></td></tr>`;
+    return;
+  }
+  rows.forEach(o => {
+    const last    = o.lastMatch ? new Date(o.lastMatch).toLocaleDateString('de-AT') : '—';
+    const sesCol  = wrBarColor(o.winrate);
+    const duelCol = wrBarColor(o.duelWinrate);
+    const tr      = document.createElement('tr');
+    const actionsTd = isOwner
+      ? `<td><div style="display:flex;gap:5px;">
+           <button class="btn btn-sm" onclick="editOpp('${o.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+           <button class="btn btn-sm btn-danger" onclick="delOpp('${o.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+         </div></td>`
+      : '';
+    tr.innerHTML = `
+      <td><div class="oname" onclick="openProfile('${o.id}')">
+        ${avHtml(o.name)} <span style="font-weight:600;">${o.name}</span>
+      </div></td>
+      <td>${o.total}</td>
+      <td><div class="form-track">${formDots(o.id)}</div></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div class="mini-bar"><div class="mini-fill" style="width:${o.winrate}%;background:${sesCol};"></div></div>
+          <span class="${wrCls(o.winrate)}" style="font-weight:600;">${o.winrate}%</span>
+        </div>
+      </td>
+      <td style="color:var(--win);">${o.wins}</td>
+      <td style="color:var(--loss);">${o.losses}</td>
+      <td style="color:var(--draw);">${o.draws}</td>
+      <td style="color:#ff8c00; font-family:var(--font-head); font-size:.82rem;">${o.totalDuels}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div class="mini-bar"><div class="mini-fill" style="width:${o.duelWinrate}%;background:${duelCol};"></div></div>
+          <span class="${wrCls(o.duelWinrate)}" style="font-weight:600;">${o.duelWinrate}%</span>
+        </div>
+      </td>
+      <td style="color:var(--muted);">${last}</td>
+      ${actionsTd}`;
+    tb.appendChild(tr);
+  });
+}
+
+function openNewOpp()  { if (!isOwner) return; openM('m-opp'); }
+
+function saveOpp(e) {
+  e.preventDefault();
+  if (!isOwner) return;
+  const id    = document.getElementById('opp-eid').value;
+  const name  = document.getElementById('opp-n').value.trim();
+  const notes = document.getElementById('opp-nt').value.trim();
+  if (id) {
+    const o = db.opponents.find(x=>x.id===id);
+    if (o) { o.name=name; o.notes=notes; }
+    toast('Opponent updated!', 'ok');
+  } else {
+    db.opponents.push({ id:uid(), name, notes, created:new Date().toISOString() });
+    toast(`${name} added!`, 'ok');
+  }
+  saveDB(); closeM('m-opp');
+}
+
+function editOpp(id) {
+  if (!isOwner) return;
+  const o = db.opponents.find(x=>x.id===id); if (!o) return;
+  document.getElementById('opp-eid').value = o.id;
+  document.getElementById('opp-n').value   = o.name;
+  document.getElementById('opp-nt').value  = o.notes||'';
+  document.getElementById('opp-m-title').textContent = 'Edit Opponent';
+  openM('m-opp');
+}
+
+async function delOpp(id) {
+  if (!isOwner) return;
+  const o = db.opponents.find(x=>x.id===id); if (!o) return;
+  const ok = await askConfirm(`Delete "${o.name}" and all associated sessions?`);
+  if (!ok) return;
+  db.opponents = db.opponents.filter(x=>x.id!==id);
+  db.matches   = db.matches.filter(x=>x.oppId!==id);
+  saveDB(); toast(`${o.name} deleted.`, 'err');
+}
+
+/* ── MATCHES ──────────────────────────────────────── */
+function fillOppSelect(selectedId) {
+  const sel = document.getElementById('match-opp');
+  sel.innerHTML = '<option value="" disabled selected>— Select opponent —</option>';
+  [...db.opponents].sort((a,b)=>a.name.localeCompare(b.name)).forEach(o => {
+    const opt = document.createElement('option');
+    opt.value=o.id; opt.textContent=o.name;
+    if (selectedId && o.id===selectedId) opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
+
+function openNewMatch() {
+  if (!isOwner) return;
+  document.getElementById('match-date').valueAsDate = new Date();
+  fillOppSelect();
+  openM('m-match');
+}
+
+function saveMatch(e) {
+  e.preventDefault();
+  if (!isOwner) return;
+  const eid   = document.getElementById('match-eid').value;
+  const oppId = document.getElementById('match-opp').value;
+  const me    = parseInt(document.getElementById('match-me').value);
+  const opp2  = parseInt(document.getElementById('match-opp2').value);
+  const date  = document.getElementById('match-date').value;
+  const notes = document.getElementById('match-note').value.trim();
+  if (!oppId) { toast('Please select an opponent.', 'err'); return; }
+  const result = me>opp2 ? 'win' : me<opp2 ? 'loss' : 'draw';
+  if (eid) {
+    const m = db.matches.find(x=>x.id===eid);
+    if (m) Object.assign(m, { oppId, myScore:me, oppScore:opp2, date, notes, result });
+    toast('Session updated!', 'ok');
+  } else {
+    db.matches.push({ id:uid(), oppId, result, myScore:me, oppScore:opp2, date, notes });
+    const lbl = result==='win' ? '🏆 Win' : result==='loss' ? '💀 Loss' : '🤝 Draw';
+    toast(`Session saved: ${lbl} (${me}:${opp2})`, result==='win' ? 'ok' : result==='loss' ? 'err' : 'inf');
+  }
+  saveDB(); closeM('m-match');
+}
+
+function editMatch(id) {
+  if (!isOwner) return;
+  const m = db.matches.find(x=>x.id===id); if (!m) return;
+  fillOppSelect(m.oppId);
+  document.getElementById('match-eid').value  = m.id;
+  document.getElementById('match-date').value = m.date;
+  document.getElementById('match-me').value   = m.myScore;
+  document.getElementById('match-opp2').value = m.oppScore;
+  document.getElementById('match-note').value = m.notes||'';
+  document.getElementById('match-m-title').textContent = 'Edit Session';
+  openM('m-match');
+}
+
+async function delMatch(id) {
+  if (!isOwner) return;
+  const ok = await askConfirm('Delete this session permanently?');
+  if (!ok) return;
+  db.matches = db.matches.filter(x=>x.id!==id);
+  saveDB(); toast('Session deleted.', 'err');
+}
+
+function renderHist() {
+  const tb = document.getElementById('hist-tb');
+  const f  = document.getElementById('hist-filter')?.value || 'all';
+  let m = [...db.matches].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if (f!=='all') m = m.filter(x=>x.result===f);
+  tb.innerHTML = '';
+  if (!m.length) {
+    tb.innerHTML = `<tr><td colspan="6"><div class="empty"><i class="fa-solid fa-clock-rotate-left"></i>No sessions found.</div></td></tr>`;
+    return;
+  }
+  m.forEach(match => {
+    const o    = db.opponents.find(x=>x.id===match.oppId);
+    const date = new Date(match.date).toLocaleDateString('de-AT');
+    const oppCell = o
+      ? `<div style="display:flex;align-items:center;gap:8px;">${avHtml(o.name)}<span style="font-weight:600;">${o.name}</span></div>`
+      : `<span style="color:var(--muted);">Deleted</span>`;
+    const actionsTd = isOwner
+      ? `<td><div style="display:flex;gap:5px;">
+           <button class="btn btn-sm" onclick="editMatch('${match.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+           <button class="btn btn-sm btn-danger" onclick="delMatch('${match.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+         </div></td>`
+      : '';
+    tb.innerHTML += `
+      <tr>
+        <td style="color:var(--muted);">${date}</td>
+        <td>${oppCell}</td>
+        <td style="font-family:var(--font-head); font-size:.95rem;">
+          <span style="color:var(--win);">${match.myScore}</span><span style="color:var(--muted);"> : </span><span style="color:var(--loss);">${match.oppScore}</span>
+        </td>
+        <td>${badge(match)}</td>
+        <td style="color:var(--muted); max-width:180px; overflow:hidden; text-overflow:ellipsis;">${match.notes||'—'}</td>
+        ${actionsTd}
+      </tr>`;
+  });
+}
+
+/* ── PROFILE ──────────────────────────────────────── */
+function openProfile(oppId) {
+  const o = db.opponents.find(x=>x.id===oppId); if (!o) return;
+  const s = oppStats(oppId);
+  const av = document.getElementById('p-av');
+  const c  = avColor(o.name);
+  av.style.cssText = `width:38px;height:38px;font-size:.82rem;background:${c}18;color:${c};border:1px solid ${c}38;`;
+  av.textContent = initials(o.name);
+
+  document.getElementById('p-name').textContent = o.name;
+  document.getElementById('p-tot').textContent  = s.total;
+  document.getElementById('p-w').textContent    = s.wins;
+  document.getElementById('p-l').textContent    = s.losses;
+  document.getElementById('p-d').textContent    = s.draws;
+  document.getElementById('p-wr').textContent   = s.winrate+'%';
+  document.getElementById('p-wr').className     = wrCls(s.winrate);
+  document.getElementById('p-notes').textContent = o.notes||'No notes.';
+  document.getElementById('p-form').innerHTML   = formDots(oppId, 9);
+
+  document.getElementById('p-duel-tot').textContent = s.totalDuels;
+  document.getElementById('p-duel-w').textContent   = s.duelWins;
+  document.getElementById('p-duel-l').textContent   = s.duelLosses;
+  const dwrEl = document.getElementById('p-duel-wr');
+  dwrEl.textContent = s.duelWinrate+'%';
+  dwrEl.className   = wrCls(s.duelWinrate);
+  document.getElementById('p-duel-avg').innerHTML = s.total
+    ? `<span style="color:var(--win);">${s.avgDuelsMe}</span> <span style="color:var(--muted);">:</span> <span style="color:var(--loss);">${s.avgDuelsOpp}</span>`
+    : '—';
+
+  const tb = document.getElementById('p-hist');
+  tb.innerHTML = '';
+  if (!s.history.length) {
+    tb.innerHTML = `<tr><td colspan="4"><div class="empty" style="padding:1.2rem;"><i class="fa-solid fa-inbox"></i>No sessions yet.</div></td></tr>`;
+  } else {
+    s.history.forEach(m => {
+      tb.innerHTML += `<tr>
+        <td style="color:var(--muted);">${new Date(m.date).toLocaleDateString('de-AT')}</td>
+        <td style="font-family:var(--font-head);">
+          <span style="color:var(--win);">${m.myScore}</span>
+          <span style="color:var(--muted);"> : </span>
+          <span style="color:var(--loss);">${m.oppScore}</span>
+        </td>
+        <td>${badge(m)}</td>
+        <td style="color:var(--muted);">${m.notes||'—'}</td>
+      </tr>`;
+    });
+  }
+  openM('m-profile');
+}
+
+/* ── DATA MANAGEMENT ──────────────────────────────── */
+function exportData() {
+  const a = document.createElement('a');
+  a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(db, null, 2));
+  a.download = `starblast_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  toast('Backup exported!', 'ok');
+}
+
+function importData(e) {
+  if (!isOwner) return;
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = async ev => {
+    try {
+      const imp = JSON.parse(ev.target.result);
+      if (!imp.opponents || !imp.matches) { toast('Invalid file format.', 'err'); return; }
+      const ok = await askConfirm('This will overwrite your current data. Continue?', 'Import');
+      if (!ok) return;
+      db = imp; saveDB(); toast('Data restored!', 'ok');
+    } catch { toast('Error reading file.', 'err'); }
+  };
+  r.readAsText(file); e.target.value='';
+}
+
+async function doClear() {
+  if (!isOwner) return;
+  const ok = await askConfirm('Permanently delete ALL opponents and sessions? This cannot be undone.', 'Delete All');
+  if (!ok) return;
+  db = { opponents:[], matches:[] }; saveDB(); toast('Database cleared.', 'err');
+}
+
+/* ── REFRESH ──────────────────────────────────────── */
+function refreshAll() { renderDash(); renderOpps(); renderHist(); }
+
+/* ── STARFIELD ────────────────────────────────────── */
+(function() {
+  const cv  = document.getElementById('starfield');
+  const ctx = cv.getContext('2d');
+  const noMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W, H, stars=[];
+
+  function resize() {
+    W = cv.width  = window.innerWidth;
+    H = cv.height = window.innerHeight;
+    const n = Math.min(Math.floor(W*H/3200), 400);
+    stars = Array.from({length:n}, ()=>({
+      x: Math.random()*W,
+      y: Math.random()*H,
+      z: Math.random()*1.4+0.2,
+      r: Math.random()*1.1+0.25
+    }));
+  }
+
+  function tick() {
+    if (!noMotion) {
+      ctx.clearRect(0,0,W,H);
+      ctx.fillStyle = 'rgba(255,255,255,.72)';
+      for (const s of stars) {
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+        s.y += s.z*0.28; if (s.y>H) { s.y=0; s.x=Math.random()*W; }
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('resize', resize);
+  resize(); tick();
+})();
+
+/* ── INIT ─────────────────────────────────────────── */
+window.addEventListener('load', () => { loadDB(); });
+</script>
+</body>
+</html>
